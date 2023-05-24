@@ -11,24 +11,25 @@ import (
 	"time"
 )
 
-// StartClient comm启动客户端
-func (comm *Comm) StartClient(addr string, key, cert, ca []byte) error {
+// NewClient comm启动客户端
+func NewClient(addr string, key, cert, ca []byte) (*mmq, error) {
+	comm := newMmq()
 	logger.Debugf("comm[%p].StartClient(addr: %v)", comm, addr)
 	client, err := connect(comm, addr, key, cert, ca)
 	if err != nil {
 		errMsg := fmt.Sprintf("StartClient error: %v", err)
 		logger.Error(errMsg)
 		comm.onStartClient(false, errMsg)
-		return err
+		return nil, err
 	}
 	comm.client = client
 	logger.Debugf("StartClient success")
 	comm.onStartClient(true, "")
-	return nil
+	return comm, nil
 }
 
 // onStartClient 返回启动客户端事件
-func (comm *Comm) onStartClient(success bool, msg string) {
+func (comm *mmq) onStartClient(success bool, msg string) {
 	m := NewMessage()
 	m.Set("cmd", "onStartClient")
 	m.Set("success", success)
@@ -37,19 +38,19 @@ func (comm *Comm) onStartClient(success bool, msg string) {
 }
 
 // StopClient 停止comm客户端
-func (comm *Comm) StopClient() {
+func (comm *mmq) StopClient() {
 	logger.Debugf("comm[%p].StopClient()", comm)
 	if comm.client != nil {
 		comm.client.close()
 	}
 }
 
-func (comm *Comm) IsClientAlive() bool {
+func (comm *mmq) IsClientAlive() bool {
 	return comm.client != nil
 }
 
 // Subscribe comm客户端订阅主题
-func (comm *Comm) Subscribe(topics string) {
+func (comm *mmq) Subscribe(topics string) {
 	logger.Debugf("comm[%p]client.Subscribe(%v)", comm, topics)
 	m := NewMessage()
 	m.Set("cmd", "subscribe")
@@ -62,7 +63,7 @@ func (comm *Comm) Subscribe(topics string) {
 }
 
 // Unsubscribe comm客户端取消订阅主题
-func (comm *Comm) Unsubscribe(topics string) {
+func (comm *mmq) Unsubscribe(topics string) {
 	logger.Debugf("comm[%p]client.Unsubscribe(%v)", comm, topics)
 	m := NewMessage()
 	m.Set("cmd", "unsubscribe")
@@ -75,7 +76,7 @@ func (comm *Comm) Unsubscribe(topics string) {
 }
 
 // Publish comm客户端发布消息
-func (comm *Comm) Publish(topic string, m *Message) {
+func (comm *mmq) Publish(topic string, m *Message) {
 	logger.Debugf("comm[%p]client.Publish(%v, %v)", comm, topic, m)
 	m.Set("cmd", "publish")
 	m.Set("topic", topic)
@@ -86,14 +87,14 @@ func (comm *Comm) Publish(topic string, m *Message) {
 	}
 }
 
-// commClient comm客户端
-type commClient struct {
+// mmqClient comm客户端
+type mmqClient struct {
 	conn   net.Conn
 	dec    *json.Decoder
 	enc    *json.Encoder
 	topics *commTopics
-	server *commServer // server==nil表示是peer
-	comm   *Comm
+	server *mmqServer // server==nil表示是peer
+	comm   *mmq
 }
 
 func setKeepAlive(conn net.Conn, d time.Duration) {
@@ -102,7 +103,7 @@ func setKeepAlive(conn net.Conn, d time.Duration) {
 	tcpConn.SetKeepAlivePeriod(d)
 }
 
-func connect(comm *Comm, addr string, key, cert, ca []byte) (*commClient, error) {
+func connect(comm *mmq, addr string, key, cert, ca []byte) (*mmqClient, error) {
 	// ca
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(ca)
@@ -136,7 +137,7 @@ func connect(comm *Comm, addr string, key, cert, ca []byte) (*commClient, error)
 		return nil, err
 	}
 	logger.Debugf("connect handshake success")
-	client := &commClient{
+	client := &mmqClient{
 		conn: conn,
 		topics: &commTopics{
 			topics: make(map[string]interface{}, 16),
@@ -146,7 +147,7 @@ func connect(comm *Comm, addr string, key, cert, ca []byte) (*commClient, error)
 	return client, nil
 }
 
-func (c *commClient) start(comm *Comm) {
+func (c *mmqClient) start(comm *mmq) {
 	c.comm = comm
 	c.enc = json.NewEncoder(c.conn)
 	go func() {
@@ -183,7 +184,7 @@ func (c *commClient) start(comm *Comm) {
 	}()
 }
 
-func (c *commClient) handleCmd(msg *Message) {
+func (c *mmqClient) handleCmd(msg *Message) {
 	logger.Debugf("comm[%p]client/peer.handleCmd(%v)", c.comm, msg)
 	cmd := msg.Get("cmd").MustString()
 	switch cmd {
@@ -210,11 +211,11 @@ func (c *commClient) handleCmd(msg *Message) {
 	}
 }
 
-func (c *commClient) send(v interface{}) error {
+func (c *mmqClient) send(v interface{}) error {
 	logger.Debugf("comm[%p]client/peer.Send() %v", c.comm, v)
 	return c.enc.Encode(v)
 }
 
-func (c *commClient) close() {
+func (c *mmqClient) close() {
 	c.conn.Close()
 }

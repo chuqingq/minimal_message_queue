@@ -8,23 +8,25 @@ import (
 	"time"
 )
 
-// StartServer 启动comm服务
-func (comm *Comm) StartServer(addr string, key, cert, ca []byte) {
+// NewServer 启动comm服务
+func NewServer(addr string, key, cert, ca []byte) (*mmq, error) {
+	comm := newMmq()
 	logger.Debugf("comm[%p].StartServer(%v)", comm, addr)
 	serverID := ""
 	server, err := listen(comm, serverID, addr, key, cert, ca)
 	if err != nil {
 		logger.Debugf("Listen error: %v", err)
 		comm.onStartServer(false, fmt.Sprintf("Listen error: %v", err))
-		return
+		return nil, err
 	}
 	comm.server = server
 	logger.Debugf("comm[%p].StartServer() success", comm)
 	comm.onStartServer(true, "")
+	return comm, nil
 }
 
 // onStartServer
-func (comm *Comm) onStartServer(success bool, msg string) {
+func (comm *mmq) onStartServer(success bool, msg string) {
 	logger.Debugf("comm[%p].onStartServer(%v,%v)", comm, success, msg)
 	m := NewMessage()
 	m.Set("cmd", "onStartServer")
@@ -34,19 +36,19 @@ func (comm *Comm) onStartServer(success bool, msg string) {
 }
 
 // StopServer 停止comm服务
-func (comm *Comm) StopServer() {
+func (comm *mmq) StopServer() {
 	logger.Debugf("comm[%p].StopServer()", comm)
 	if comm.server != nil {
 		comm.server.Close()
 	}
 }
 
-func (comm *Comm) IsServerAlive() bool {
+func (comm *mmq) IsServerAlive() bool {
 	return comm.server != nil
 }
 
 // dispatchTopic comm根据收到的topic分发给订阅的client
-func (comm *Comm) dispatchTopic(topic string, m *Message) {
+func (comm *mmq) dispatchTopic(topic string, m *Message) {
 	logger.Debugf("comm[%p].dispatchTopic(%v) %p", comm, topic, comm.server)
 	for _, peer := range comm.server.peers {
 		if peer.topics.match(topic) {
@@ -56,17 +58,17 @@ func (comm *Comm) dispatchTopic(topic string, m *Message) {
 	}
 }
 
-// commServer comm服务端
-type commServer struct {
+// mmqServer comm服务端
+type mmqServer struct {
 	id       string
 	listener net.Listener
-	peers    []*commClient
+	peers    []*mmqClient
 	// cloud    *commCloud
-	comm *Comm
+	comm *mmq
 }
 
 // listen comm服务端启动监听
-func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, error) {
+func listen(comm *mmq, id, addr string, key, cert, ca []byte) (*mmqServer, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		logger.Debugf("ResolveTCPAddr(%v) error: %v", addr, err)
@@ -95,7 +97,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 	}
 	logger.Debugf("listen success")
 	// commServer
-	server := &commServer{
+	server := &mmqServer{
 		listener: listener,
 		id:       id,
 		comm:     comm,
@@ -118,7 +120,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 				logger.Debugf("server handshake error: %v", err)
 				continue
 			}
-			peer := &commClient{
+			peer := &mmqClient{
 				conn:   conn,
 				server: server,
 				topics: &commTopics{
@@ -134,7 +136,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 }
 
 // Close 关闭comm服务端
-func (s *commServer) Close() {
+func (s *mmqServer) Close() {
 	s.listener.Close()
 	for _, c := range s.peers {
 		c.close()

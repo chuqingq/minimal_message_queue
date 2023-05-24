@@ -21,6 +21,8 @@
 - [ ] comm.go中的startServer等不带json的接口可以直接暴露到so中；收发数据的Data接口因为用到json，需要在so中封装一个接口暴露json字符串
 - [ ] 生成证书服务
 
+- [ ] Comm名字改为mq
 - [ ] StartClient和StartServer分开
+- [ ] 去掉RegisterMessageCallback，因为回调的方式和Recv的方式冲突，可能导致Recv没收到消息。回调完全可以让业务自己起协程去Recv再callback
 - [ ] 考虑使用对称密钥代替TLS。简化
 - [ ] 考虑使用mDNS代替tcp服务端。

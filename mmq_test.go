@@ -45,15 +45,11 @@ func initCert() {
 func TestComm(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 	initCert()
-	// 初始化
-	s := NewComm()
-	c1 := NewComm()
-	c2 := NewComm()
-	c3 := NewComm()
 	// 用例开始
 	// startServer:server1
 	log.Printf("====StartServer")
-	s.StartServer(addr, serverKey, serverCert, caCert)
+	s, err := NewServer(addr, serverKey, serverCert, caCert)
+	assert(err == nil)
 	// onStartServer
 	msg := *s.Recv()
 	log.Printf("s recv: %v", msg)
@@ -63,7 +59,8 @@ func TestComm(t *testing.T) {
 
 	// client1
 	log.Printf("====startClient")
-	c1.StartClient(addr, clientKey, clientCert, caCert)
+	c1, err := NewClient(addr, clientKey, clientCert, caCert)
+	assert(err == nil)
 	// onStartClient
 	msg = *c1.Recv()
 	log.Printf("c1 recv: %v", msg)
@@ -71,9 +68,13 @@ func TestComm(t *testing.T) {
 	assert(msg.Bool("success"))
 	defer c1.StopClient()
 
+	// msg = *s.Recv()
+	// log.Printf("s recv: %v", msg)
+
 	// client2
 	log.Printf("====startClient2")
-	c2.StartClient(addr, clientKey, clientCert, caCert)
+	c2, err := NewClient(addr, clientKey, clientCert, caCert)
+	assert(err == nil)
 	// defer c.StopClient("client2")
 	// onStartClient
 	msg = *c2.Recv()
@@ -84,7 +85,8 @@ func TestComm(t *testing.T) {
 
 	// client3
 	log.Printf("====startClient3 invalid")
-	c3.StartClient(addr, clientKey2, clientCert2, caCert)
+	c3, err := NewClient(addr, clientKey2, clientCert2, caCert)
+	assert(err == nil)
 	// onStartClient
 	msg = *c3.Recv()
 	log.Printf("c3 recv: %v", msg)
