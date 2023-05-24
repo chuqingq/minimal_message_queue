@@ -5,70 +5,48 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
-// NewServer 启动comm服务
-func NewServer(addr string, key, cert, ca []byte) (*mmq, error) {
-	comm := newMmq()
-	logger.Debugf("comm[%p].StartServer(%v)", comm, addr)
-	serverID := ""
-	server, err := listen(comm, serverID, addr, key, cert, ca)
+// mmqServer 服务端
+type mmqServer struct {
+	listener   net.Listener
+	outChan    chan Message
+	peersMutex sync.Mutex // add/del/dispatch
+	peers      []*mmqClient
+}
+
+// NewServer 创建并启动服务端
+func NewServer(addr string, key, cert, ca []byte) (*mmqServer, error) {
+	logger.Debugf("StartServer(%v)", addr)
+	server, err := listen(addr, key, cert, ca)
 	if err != nil {
 		logger.Debugf("Listen error: %v", err)
-		comm.onStartServer(false, fmt.Sprintf("Listen error: %v", err))
+		server.onStartServer(false, fmt.Sprintf("Listen error: %v", err))
 		return nil, err
 	}
-	comm.server = server
-	logger.Debugf("comm[%p].StartServer() success", comm)
-	comm.onStartServer(true, "")
-	return comm, nil
+	logger.Debugf("server[%p].StartServer() success", server)
+	server.onStartServer(true, "")
+	return server, nil
 }
 
 // onStartServer
-func (comm *mmq) onStartServer(success bool, msg string) {
-	logger.Debugf("comm[%p].onStartServer(%v,%v)", comm, success, msg)
+func (s *mmqServer) onStartServer(success bool, msg string) {
+	logger.Debugf("server[%p].onStartServer(%v,%v)", s, success, msg)
 	m := NewMessage()
 	m.Set("cmd", "onStartServer")
 	m.Set("success", success)
 	m.Set("msg", msg)
-	comm.input(m)
+	sendMessage(s.outChan, m)
 }
 
-// StopServer 停止comm服务
-func (comm *mmq) StopServer() {
-	logger.Debugf("comm[%p].StopServer()", comm)
-	if comm.server != nil {
-		comm.server.Close()
-	}
+func (s *mmqServer) IsServerAlive() bool {
+	return s.listener != nil
 }
 
-func (comm *mmq) IsServerAlive() bool {
-	return comm.server != nil
-}
-
-// dispatchTopic comm根据收到的topic分发给订阅的client
-func (comm *mmq) dispatchTopic(topic string, m *Message) {
-	logger.Debugf("comm[%p].dispatchTopic(%v) %p", comm, topic, comm.server)
-	for _, peer := range comm.server.peers {
-		if peer.topics.match(topic) {
-			logger.Debugf("dispatchTopic(%v, %v) to peer: %p", topic, m, peer)
-			peer.send(m)
-		}
-	}
-}
-
-// mmqServer comm服务端
-type mmqServer struct {
-	id       string
-	listener net.Listener
-	peers    []*mmqClient
-	// cloud    *commCloud
-	comm *mmq
-}
-
-// listen comm服务端启动监听
-func listen(comm *mmq, id, addr string, key, cert, ca []byte) (*mmqServer, error) {
+// listen 服务端启动监听
+func listen(addr string, key, cert, ca []byte) (*mmqServer, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		logger.Debugf("ResolveTCPAddr(%v) error: %v", addr, err)
@@ -96,11 +74,10 @@ func listen(comm *mmq, id, addr string, key, cert, ca []byte) (*mmqServer, error
 		return nil, err
 	}
 	logger.Debugf("listen success")
-	// commServer
+	// server
 	server := &mmqServer{
 		listener: listener,
-		id:       id,
-		comm:     comm,
+		outChan:  make(chan Message, 128),
 	}
 	// accept
 	go func() {
@@ -123,22 +100,85 @@ func listen(comm *mmq, id, addr string, key, cert, ca []byte) (*mmqServer, error
 			peer := &mmqClient{
 				conn:   conn,
 				server: server,
-				topics: &commTopics{
+				topics: &mmqTopics{
 					topics: make(map[string]interface{}, 16),
 				},
 			}
-			server.peers = append(server.peers, peer)
-			logger.Debugf("comm[%p] accepted peer[%p]", comm, peer)
-			peer.start(comm)
+			server.addPeer(peer)
+			logger.Debugf("server[%p] accepted peer[%p]", server, peer)
+			peer.start()
 		}
 	}()
 	return server, nil
 }
 
-// Close 关闭comm服务端
+// Close 关闭服务端
 func (s *mmqServer) Close() {
 	s.listener.Close()
+	s.listener = nil
 	for _, c := range s.peers {
-		c.close()
+		c.Close()
+	}
+}
+
+func (s *mmqServer) addPeer(c *mmqClient) {
+	s.peersMutex.Lock()
+	s.peers = append(s.peers, c)
+	s.peersMutex.Unlock()
+}
+
+func (s *mmqServer) delPeer(c *mmqClient) {
+	s.peersMutex.Lock()
+	defer s.peersMutex.Unlock()
+	for index, peer := range s.peers {
+		if c == peer {
+			s.peers = append(s.peers[:index], s.peers[index:]...)
+			break
+		}
+	}
+}
+
+// dispatchTopic 根据收到的topic分发给订阅的client
+func (s *mmqServer) dispatchTopic(topic string, m *Message) {
+	logger.Debugf("server[%p].dispatchTopic(%v) %p", s, topic, s)
+	s.peersMutex.Lock()
+	defer s.peersMutex.Unlock()
+	for _, peer := range s.peers {
+		if peer.topics.match(topic) {
+			logger.Debugf("dispatchTopic(%v, %v) to peer: %p", topic, m, peer)
+			peer.send(m)
+		}
+	}
+}
+
+func sendMessage(outChan chan Message, msg *Message) {
+	logger.Debugf("sendMessage: %v", msg)
+	select {
+	case outChan <- *msg:
+	default:
+		logger.Debugf("sendMessage chan full")
+	}
+}
+
+func (s *mmqServer) Recv() *Message {
+	return recvWithTimeout(s.outChan, -1)
+}
+
+func (s *mmqServer) TryRecv() *Message {
+	return recvWithTimeout(s.outChan, 0)
+}
+
+func recvWithTimeout(outChan chan Message, timeout time.Duration) *Message {
+	if timeout == -1 {
+		msg := <-outChan
+		return &msg
+	} else {
+		select {
+		case msg := <-outChan:
+			return &msg
+		case <-time.After(timeout):
+			logger.Infof("Recv() timeout")
+			return nil
+		}
 	}
 }

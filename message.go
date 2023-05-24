@@ -9,7 +9,7 @@ import (
 	json "github.com/bitly/go-simplejson"
 )
 
-// Message comm使用的消息
+// Message 使用的消息
 type Message struct {
 	json.Json
 }

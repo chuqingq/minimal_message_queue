@@ -42,7 +42,7 @@ func initCert() {
 	assert(err == nil)
 }
 
-func TestComm(t *testing.T) {
+func TestMmq(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 	initCert()
 	// 用例开始
@@ -55,7 +55,7 @@ func TestComm(t *testing.T) {
 	log.Printf("s recv: %v", msg)
 	assert(msg.String("cmd") == "onStartServer")
 	assert(msg.Bool("success"))
-	defer s.StopServer()
+	defer s.Close()
 
 	// client1
 	log.Printf("====startClient")
@@ -66,7 +66,7 @@ func TestComm(t *testing.T) {
 	log.Printf("c1 recv: %v", msg)
 	assert(msg.String("cmd") == "onStartClient")
 	assert(msg.Bool("success"))
-	defer c1.StopClient()
+	defer c1.Close()
 
 	// msg = *s.Recv()
 	// log.Printf("s recv: %v", msg)
@@ -116,7 +116,7 @@ func TestComm(t *testing.T) {
 	assert(msg.String("topic") == "client1Topic")
 	// stopClient:client2
 	log.Printf("====stopClient client2")
-	c2.StopClient()
+	c2.Close()
 }
 
 func assert(b bool) {

@@ -5,13 +5,13 @@ import (
 	"sync"
 )
 
-// commTopics TODO 当前不支持通配符
-type commTopics struct {
+// mmqTopics TODO 当前不支持通配符
+type mmqTopics struct {
 	sync.Mutex
 	topics map[string]interface{}
 }
 
-func (t *commTopics) add(topics string) {
+func (t *mmqTopics) add(topics string) {
 	ts := strings.Split(topics, ",")
 	t.Lock()
 	for _, topic := range ts {
@@ -20,7 +20,7 @@ func (t *commTopics) add(topics string) {
 	t.Unlock()
 }
 
-func (t *commTopics) remove(topics string) {
+func (t *mmqTopics) remove(topics string) {
 	ts := strings.Split(topics, ",")
 	t.Lock()
 	for _, topic := range ts {
@@ -29,7 +29,7 @@ func (t *commTopics) remove(topics string) {
 	t.Unlock()
 }
 
-func (t *commTopics) match(topic string) bool {
+func (t *mmqTopics) match(topic string) bool {
 	t.Lock()
 	_, ok := t.topics[topic]
 	t.Unlock()
