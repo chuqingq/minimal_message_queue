@@ -3,11 +3,8 @@ package mmq
 import (
 	"io/ioutil"
 	"log"
-
-	// "net/http"
 	"testing"
 	"time"
-	// "github.com/gorilla/websocket"
 )
 
 var (
@@ -26,15 +23,6 @@ func initCert() {
 	// ca
 	caCert, err = ioutil.ReadFile("certs/ca.cer")
 	assert(err == nil)
-	// // add cert to pool
-	// pool, err := x509.SystemCertPool()
-	// if err != nil {
-	// 	log.Fatalf("system cert pool error: %v", err)
-	// }
-	// ok := pool.AppendCertsFromPEM(caCert)
-	// if !ok {
-	// 	log.Fatalf("AppendCertsFromPEM error")
-	// }
 	// server
 	serverKey, err = ioutil.ReadFile("certs/server.key")
 	assert(err == nil)
@@ -124,30 +112,6 @@ func TestComm(t *testing.T) {
 	// stopClient:client2
 	log.Printf("====stopClient client2")
 	c2.StopClient()
-	// // 启动云
-	// go startCloud()
-	// time.Sleep(100 * time.Millisecond) // 等待云启动成功
-	// // 连接云
-	// s.ConnectCloud("cloudClientID1", cloudURL, clientKey, clientCert, caCert)
-	// // 连接云结果
-	// msg = *s.Recv()
-	// assert(msg.String("cmd") == "onConnectCloud")
-	// assert(msg.Bool("success") == true)
-	// defer s.DisconnectCloud()
-	// // 通过c1给云发请求
-	// pmsg, err = util.MessageFromString(`{
-	// 	"data": {
-	// 		"cloudResponseTopic": "client1Topic",
-	// 		"key6":               "value6"
-	// 	}
-	// }`)
-	// assert(err == nil)
-	// msg = *pmsg
-	// c1.Publish("cloudRequest", &msg)
-	// // c1接收云响应
-	// msg = *c1.Recv()
-	// assert(msg.String("cmd") == "publish")
-	// assert(msg.String("topic") == "client1Topic")
 }
 
 func assert(b bool) {
@@ -155,41 +119,3 @@ func assert(b bool) {
 		panic("assert failed!!!!")
 	}
 }
-
-// const cloudURL = "ws://127.0.0.1:8123/websocket"
-
-// func startCloud() {
-// 	http.HandleFunc("/websocket", handleWebsocket)
-// 	log.Logger().Debugf("startCloud")
-// 	log.Fatal(http.ListenAndServe("127.0.0.1:8123", nil))
-// }
-
-// func handleWebsocket(w http.ResponseWriter, r *http.Request) {
-// 	log.Logger().Debugf("handleWebsocket")
-// 	c, err := upgrader.Upgrade(w, r, nil)
-// 	if err != nil {
-// 		log.Print("upgrade:", err)
-// 		return
-// 	}
-// 	defer c.Close()
-// 	for {
-// 		mt, message, err := c.ReadMessage()
-// 		if err != nil {
-// 			log.Logger().Error("read:", err)
-// 			break
-// 		}
-// 		log.Logger().Debugf("cloud recv: %s", message)
-// 		// 修改内容
-// 		m, _ := util.MessageFromBytes(message)
-// 		// m.Set("topic", ((*m)["data"].(map[string]interface{}))["cloudResponseTopic"].(string))
-// 		m.Set("topic", m.String("data.cloudResponseTopic"))
-// 		err = c.WriteMessage(mt, m.ToBytes())
-// 		if err != nil {
-// 			log.Logger().Error("write:", err)
-// 			break
-// 		}
-// 		log.Logger().Debugf("cloud write back")
-// 	}
-// }
-
-// var upgrader = websocket.Upgrader{} // use default options
