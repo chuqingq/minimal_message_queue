@@ -2,77 +2,72 @@ package mmq
 
 import (
 	"errors"
-	"log"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMmq(t *testing.T) {
 	assert := assert.New(t)
 
-	logger.SetLevel(logrus.DebugLevel)
+	// logger.SetLevel(logrus.DebugLevel)
 	initCert(assert)
 
 	// startServer
-	log.Printf("====StartServer")
+	logger.Debugf("====StartServer")
 	s, err := NewServer(addr, serverKey, serverCert, caCert)
 	assert.NoError(err)
 
 	// onStartServer
 	msg := *s.Recv()
-	log.Printf("s recv: %v", msg)
+	logger.Debugf("s recv: %v", msg)
 	assert.Equal(msg.String("cmd"), "onStartServer")
 	assert.True(msg.Bool("success"))
 	defer s.Close()
 
 	// client1
-	log.Printf("====startClient")
+	logger.Debugf("====startClient")
 	c1, err := NewClient(addr, clientKey, clientCert, caCert)
 	assert.NoError(err)
 
 	// onStartClient
 	msg = *c1.Recv()
-	log.Printf("c1 recv: %v", msg)
+	logger.Debugf("c1 recv: %v", msg)
 	assert.Equal(msg.String("cmd"), "onStartClient")
 	assert.True(msg.Bool("success"))
 	defer c1.Close()
 
-	// msg = *s.Recv()
-	// log.Printf("s recv: %v", msg)
-
 	// client2
-	log.Printf("====startClient2")
+	logger.Debugf("====startClient2")
 	c2, err := NewClient(addr, clientKey, clientCert, caCert)
 	assert.NoError(err)
-	// defer c.StopClient("client2")
+
 	// onStartClient
 	msg = *c2.Recv()
-	log.Printf("c2 recv: %v", msg)
+	logger.Debugf("c2 recv: %v", msg)
 	assert.Equal(msg.String("cmd"), "onStartClient")
 	assert.True(msg.Bool("success"))
-	// assert(msg["client"].(string) == "client2")
 
 	// client3
-	log.Printf("====startClient3 invalid")
+	logger.Debugf("====startClient3 invalid")
 	c3, err := NewClient(addr, clientKey2, clientCert2, caCert)
 	assert.NoError(err)
+
 	// onStartClient
 	msg = *c3.Recv()
-	log.Printf("c3 recv: %v", msg)
+	logger.Debugf("c3 recv: %v", msg)
 	assert.Equal(msg.String("cmd"), "onStartClient")
 	assert.True(msg.Bool("success"))
 
 	// client1 subscribe
-	log.Printf("====client1 subscribe client1Topic")
+	logger.Debugf("====client1 subscribe client1Topic")
 	c1.Subscribe("client1Topic")
 	time.Sleep(100 * time.Millisecond) // 确保订阅成功后再发布消息
 
 	// client2 publish
-	log.Printf("====client2 send topic client1Topic")
+	logger.Debugf("====client2 send topic client1Topic")
 	pmsg, err := MessageFromString(`{
 		"data": {
 			"key5": "value5"
@@ -84,12 +79,12 @@ func TestMmq(t *testing.T) {
 
 	// client1 recv
 	msg = *c1.Recv()
-	log.Printf("c1 recv msg: %v", msg)
+	logger.Debugf("c1 recv msg: %v", msg)
 	assert.Equal(msg.String("cmd"), "publish")
 	assert.Equal(msg.String("topic"), "client1Topic")
 
 	// stopClient:client2
-	log.Printf("====stopClient client2")
+	logger.Debugf("====stopClient client2")
 	c2.Close()
 }
 
