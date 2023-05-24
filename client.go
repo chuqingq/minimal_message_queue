@@ -97,8 +97,10 @@ func (c *mmqClient) TryRecv() *Message {
 
 func (c *mmqClient) Close() {
 	logger.Debugf("client[%p] close", c)
-	c.conn.Close()
-	c.conn = nil
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
 	if c.server != nil {
 		c.server.delPeer(c)
 	}

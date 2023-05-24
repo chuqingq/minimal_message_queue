@@ -140,7 +140,7 @@ func (s *mmqServer) delPeer(c *mmqClient) {
 
 // dispatchTopic 根据收到的topic分发给订阅的client
 func (s *mmqServer) dispatchTopic(topic string, m *Message) {
-	logger.Debugf("server[%p].dispatchTopic(%v) %p", s, topic, s)
+	logger.Debugf("server[%p].dispatchTopic(%v)", s, topic)
 	s.peersMutex.Lock()
 	defer s.peersMutex.Unlock()
 	for _, peer := range s.peers {
