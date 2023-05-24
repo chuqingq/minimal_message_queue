@@ -6,27 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"mmq/log"
-
-	// "junheiot/log"
 	"net"
 	"strings"
 	"time"
-	// "junheiot/util"
 )
 
 // StartClient comm启动客户端
 func (comm *Comm) StartClient(addr string, key, cert, ca []byte) error {
-	log.Logger().Debugf("comm[%p].StartClient(addr: %v)", comm, addr)
+	logger.Debugf("comm[%p].StartClient(addr: %v)", comm, addr)
 	client, err := connect(comm, addr, key, cert, ca)
 	if err != nil {
 		errMsg := fmt.Sprintf("StartClient error: %v", err)
-		log.Logger().Error(errMsg)
+		logger.Error(errMsg)
 		comm.onStartClient(false, errMsg)
 		return err
 	}
 	comm.client = client
-	log.Logger().Debugf("StartClient success")
+	logger.Debugf("StartClient success")
 	comm.onStartClient(true, "")
 	return nil
 }
@@ -42,7 +38,7 @@ func (comm *Comm) onStartClient(success bool, msg string) {
 
 // StopClient 停止comm客户端
 func (comm *Comm) StopClient() {
-	log.Logger().Debugf("comm[%p].StopClient()", comm)
+	logger.Debugf("comm[%p].StopClient()", comm)
 	if comm.client != nil {
 		comm.client.close()
 	}
@@ -54,39 +50,39 @@ func (comm *Comm) IsClientAlive() bool {
 
 // Subscribe comm客户端订阅主题
 func (comm *Comm) Subscribe(topics string) {
-	log.Logger().Debugf("comm[%p]client.Subscribe(%v)", comm, topics)
+	logger.Debugf("comm[%p]client.Subscribe(%v)", comm, topics)
 	m := NewMessage()
 	m.Set("cmd", "subscribe")
 	m.Set("topics", topics)
 	if comm.client != nil && comm.client.enc != nil {
 		comm.client.send(m)
 	} else {
-		log.Logger().Errorf("comm is disconnected")
+		logger.Errorf("comm is disconnected")
 	}
 }
 
 // Unsubscribe comm客户端取消订阅主题
 func (comm *Comm) Unsubscribe(topics string) {
-	log.Logger().Debugf("comm[%p]client.Unsubscribe(%v)", comm, topics)
+	logger.Debugf("comm[%p]client.Unsubscribe(%v)", comm, topics)
 	m := NewMessage()
 	m.Set("cmd", "unsubscribe")
 	m.Set("topics", topics)
 	if comm.client != nil && comm.client.enc != nil {
 		comm.client.send(m)
 	} else {
-		log.Logger().Errorf("comm is disconnected")
+		logger.Errorf("comm is disconnected")
 	}
 }
 
 // Publish comm客户端发布消息
 func (comm *Comm) Publish(topic string, m *Message) {
-	log.Logger().Debugf("comm[%p]client.Publish(%v, %v)", comm, topic, m)
+	logger.Debugf("comm[%p]client.Publish(%v, %v)", comm, topic, m)
 	m.Set("cmd", "publish")
 	m.Set("topic", topic)
 	if comm.client != nil && comm.client.enc != nil {
 		comm.client.send(m)
 	} else {
-		log.Logger().Errorf("comm is disconnected")
+		logger.Errorf("comm is disconnected")
 	}
 }
 
@@ -113,7 +109,7 @@ func connect(comm *Comm, addr string, key, cert, ca []byte) (*commClient, error)
 	// clientCert
 	cliCrt, err := tls.X509KeyPair(cert, key)
 	if err != nil {
-		log.Logger().Debugf("X509KeyPair() error: %v", err)
+		logger.Debugf("X509KeyPair() error: %v", err)
 		return nil, err
 	}
 	// tlsConfig
@@ -125,7 +121,7 @@ func connect(comm *Comm, addr string, key, cert, ca []byte) (*commClient, error)
 	// dial
 	tcpConn, err := net.Dial("tcp", addr)
 	if err != nil {
-		log.Logger().Debugf("Dial(%v) error: %v", addr, err)
+		logger.Debugf("Dial(%v) error: %v", addr, err)
 		return nil, err
 	}
 	// setkeepalive
@@ -136,10 +132,10 @@ func connect(comm *Comm, addr string, key, cert, ca []byte) (*commClient, error)
 	// handshake
 	err = conn.Handshake()
 	if err != nil {
-		log.Logger().Debugf("connect handshake error: %v", err)
+		logger.Debugf("connect handshake error: %v", err)
 		return nil, err
 	}
-	log.Logger().Debugf("connect handshake success")
+	logger.Debugf("connect handshake success")
 	client := &commClient{
 		conn: conn,
 		topics: &commTopics{
@@ -162,9 +158,9 @@ func (c *commClient) start(comm *Comm) {
 			if err != nil {
 				// 需要判断错误类型。如果是本端断开，上报onServerDisconnected；如果是远端断开，上报onClientDisconnected
 				if c.server == nil {
-					log.Logger().Debugf("comm[%p]client disconnected: %v", comm, err)
+					logger.Debugf("comm[%p]client disconnected: %v", comm, err)
 				} else {
-					log.Logger().Debugf("comm[%p]peer disconnected: %v", comm, err)
+					logger.Debugf("comm[%p]peer disconnected: %v", comm, err)
 				}
 				errStr := err.Error()
 				if strings.Contains(errStr, "use of closed network connection") {
@@ -173,9 +169,10 @@ func (c *commClient) start(comm *Comm) {
 					if c.server == nil {
 						// 如果是客户端，需要通知业务连接已断开
 						c.comm.onStartClient(false, errStr)
-					} else {
-						// 如果是服务端，无法重连，直接断开
 					}
+					//  else {
+					// 	// 如果是服务端，无法重连，直接断开
+					// }
 
 				}
 				c.close()
@@ -187,7 +184,7 @@ func (c *commClient) start(comm *Comm) {
 }
 
 func (c *commClient) handleCmd(msg *Message) {
-	log.Logger().Debugf("comm[%p]client/peer.handleCmd(%v)", c.comm, msg)
+	logger.Debugf("comm[%p]client/peer.handleCmd(%v)", c.comm, msg)
 	cmd := msg.Get("cmd").MustString()
 	switch cmd {
 	case "subscribe":
@@ -209,12 +206,12 @@ func (c *commClient) handleCmd(msg *Message) {
 		topic := /*(*msg)["topic"].(string)*/ msg.Get("topic").MustString()
 		c.comm.dispatchTopic(topic, msg)
 	default:
-		log.Logger().Debugf("unknown cmd: %v", cmd)
+		logger.Debugf("unknown cmd: %v", cmd)
 	}
 }
 
 func (c *commClient) send(v interface{}) error {
-	log.Logger().Debugf("comm[%p]client/peer.Send() %v", c.comm, v)
+	logger.Debugf("comm[%p]client/peer.Send() %v", c.comm, v)
 	return c.enc.Encode(v)
 }
 

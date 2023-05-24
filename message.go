@@ -1,9 +1,9 @@
 package mmq
 
 import (
-	gojson "encoding/json"
-	"io/ioutil"
+	stdjson "encoding/json"
 	"log"
+	"os"
 	"strings"
 
 	json "github.com/bitly/go-simplejson"
@@ -47,7 +47,7 @@ func (m *Message) Array() []Message {
 	if arr == nil || err != nil {
 		return nil
 	}
-	marray := make([]Message, len(arr), len(arr))
+	marray := make([]Message, len(arr))
 	for i, a := range arr {
 		marray[i].SetPath([]string{}, a)
 	}
@@ -61,7 +61,7 @@ func (m *Message) Map(path string, def ...map[string]interface{}) map[string]int
 // Unmarshal 把m解析到v上。类似json.Unmarshal()
 func (m *Message) Unmarshal(v interface{}) error {
 	b := m.ToBytes()
-	return gojson.Unmarshal(b, v)
+	return stdjson.Unmarshal(b, v)
 }
 
 // ToBytes Message转成[]byte
@@ -95,14 +95,14 @@ func MessageFromString(s string) (*Message, error) {
 
 // MessageFromStruct 类似json.Marshal()
 func MessageFromStruct(v interface{}) *Message {
-	b, _ := gojson.Marshal(v)
+	b, _ := stdjson.Marshal(v)
 	m, _ := MessageFromBytes(b)
 	return m
 }
 
 // MessageFromFile 从filepath读取Message
 func MessageFromFile(filepath string) (*Message, error) {
-	b, err := ioutil.ReadFile(filepath)
+	b, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (m *Message) ToFile(filepath string) error {
 		return err
 	}
 	const defaultFileMode = 0644
-	return ioutil.WriteFile(filepath, b, defaultFileMode)
+	return os.WriteFile(filepath, b, defaultFileMode)
 }
 
 /*

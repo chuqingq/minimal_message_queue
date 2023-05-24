@@ -6,28 +6,26 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	"mmq/log"
 )
 
 // StartServer 启动comm服务
 func (comm *Comm) StartServer(addr string, key, cert, ca []byte) {
-	log.Logger().Debugf("comm[%p].StartServer(%v)", comm, addr)
+	logger.Debugf("comm[%p].StartServer(%v)", comm, addr)
 	serverID := ""
 	server, err := listen(comm, serverID, addr, key, cert, ca)
 	if err != nil {
-		log.Logger().Debugf("Listen error: %v", err)
+		logger.Debugf("Listen error: %v", err)
 		comm.onStartServer(false, fmt.Sprintf("Listen error: %v", err))
 		return
 	}
 	comm.server = server
-	log.Logger().Debugf("comm[%p].StartServer() success", comm)
+	logger.Debugf("comm[%p].StartServer() success", comm)
 	comm.onStartServer(true, "")
 }
 
 // onStartServer
 func (comm *Comm) onStartServer(success bool, msg string) {
-	log.Logger().Debugf("comm[%p].onStartServer(%v,%v)", comm, success, msg)
+	logger.Debugf("comm[%p].onStartServer(%v,%v)", comm, success, msg)
 	m := NewMessage()
 	m.Set("cmd", "onStartServer")
 	m.Set("success", success)
@@ -37,7 +35,7 @@ func (comm *Comm) onStartServer(success bool, msg string) {
 
 // StopServer 停止comm服务
 func (comm *Comm) StopServer() {
-	log.Logger().Debugf("comm[%p].StopServer()", comm)
+	logger.Debugf("comm[%p].StopServer()", comm)
 	if comm.server != nil {
 		comm.server.Close()
 	}
@@ -49,10 +47,10 @@ func (comm *Comm) IsServerAlive() bool {
 
 // dispatchTopic comm根据收到的topic分发给订阅的client
 func (comm *Comm) dispatchTopic(topic string, m *Message) {
-	log.Logger().Debugf("comm[%p].dispatchTopic(%v) %p", comm, topic, comm.server)
+	logger.Debugf("comm[%p].dispatchTopic(%v) %p", comm, topic, comm.server)
 	for _, peer := range comm.server.peers {
 		if peer.topics.match(topic) {
-			log.Logger().Debugf("dispatchTopic(%v, %v) to peer: %p", topic, m, peer)
+			logger.Debugf("dispatchTopic(%v, %v) to peer: %p", topic, m, peer)
 			peer.send(m)
 		}
 	}
@@ -71,7 +69,7 @@ type commServer struct {
 func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		log.Logger().Debugf("ResolveTCPAddr(%v) error: %v", addr, err)
+		logger.Debugf("ResolveTCPAddr(%v) error: %v", addr, err)
 		return nil, err
 	}
 	// pool
@@ -80,7 +78,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 	// serverCert
 	serverCert, err := tls.X509KeyPair(cert, key)
 	if err != nil {
-		log.Logger().Debugf("X509KeyPair error: %v", err)
+		logger.Debugf("X509KeyPair error: %v", err)
 		return nil, err
 	}
 	// tlsConfig
@@ -92,10 +90,10 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 	}
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
-		log.Logger().Debugf("ListenTCP() error: %v", err)
+		logger.Debugf("ListenTCP() error: %v", err)
 		return nil, err
 	}
-	log.Logger().Debugf("listen success")
+	logger.Debugf("listen success")
 	// commServer
 	server := &commServer{
 		listener: listener,
@@ -107,7 +105,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 		for {
 			tcpConn, err := listener.Accept()
 			if err != nil {
-				log.Logger().Debugf("accept error: %v", err)
+				logger.Debugf("accept error: %v", err)
 				return
 			}
 			// keepalive
@@ -117,7 +115,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 			// handshake
 			err = conn.Handshake()
 			if err != nil {
-				log.Logger().Debugf("server handshake error: %v", err)
+				logger.Debugf("server handshake error: %v", err)
 				continue
 			}
 			peer := &commClient{
@@ -128,7 +126,7 @@ func listen(comm *Comm, id, addr string, key, cert, ca []byte) (*commServer, err
 				},
 			}
 			server.peers = append(server.peers, peer)
-			log.Logger().Debugf("comm[%p] accepted peer[%p]", comm, peer)
+			logger.Debugf("comm[%p] accepted peer[%p]", comm, peer)
 			peer.start(comm)
 		}
 	}()

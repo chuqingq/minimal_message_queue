@@ -1,9 +1,6 @@
 package mmq
 
 import (
-	"mmq/log"
-
-	// "sync"
 	"time"
 )
 
@@ -32,7 +29,7 @@ func init() {
 	// 	util.I().Printf("set tcp_retries2 error: %v", err)
 	// 	return
 	// }
-	// log.Logger().Debugf("set tcp_retries success")
+	// logger.Debugf("set tcp_retries success")
 }
 
 // NewComm 创建新的通讯库实例
@@ -44,11 +41,11 @@ func NewComm() *Comm {
 
 // input 内部接收到消息，转发给调用方
 func (comm *Comm) input(msg *Message) {
-	log.Logger().Debugf("comm[%p].input() %v", comm, msg)
+	logger.Debugf("comm[%p].input() %v", comm, msg)
 	select {
 	case comm.outChan <- *msg:
 	default:
-		log.Logger().Debugf("comm.input chan full")
+		logger.Debugf("comm.input chan full")
 	}
 }
 
@@ -63,16 +60,14 @@ func (comm *Comm) TryRecv() *Message {
 
 func (comm *Comm) RecvWithTimeout(timeout time.Duration) *Message {
 	if timeout == -1 {
-		select {
-		case msg := <-comm.outChan:
-			return &msg
-		}
+		msg := <-comm.outChan
+		return &msg
 	} else {
 		select {
 		case msg := <-comm.outChan:
 			return &msg
 		case <-time.After(timeout):
-			log.Logger().Infof("comm.Recv() timeout")
+			logger.Infof("comm.Recv() timeout")
 			return nil
 		}
 	}

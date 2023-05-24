@@ -1,10 +1,12 @@
 package mmq
 
 import (
-	"io/ioutil"
 	"log"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -21,26 +23,27 @@ var (
 func initCert() {
 	var err error
 	// ca
-	caCert, err = ioutil.ReadFile("certs/ca.cer")
+	caCert, err = os.ReadFile("certs/ca.cer")
 	assert(err == nil)
 	// server
-	serverKey, err = ioutil.ReadFile("certs/server.key")
+	serverKey, err = os.ReadFile("certs/server.key")
 	assert(err == nil)
-	serverCert, err = ioutil.ReadFile("certs/server.cer")
+	serverCert, err = os.ReadFile("certs/server.cer")
 	assert(err == nil)
 	// client
-	clientKey, err = ioutil.ReadFile("certs/client.key")
+	clientKey, err = os.ReadFile("certs/client.key")
 	assert(err == nil)
-	clientCert, err = ioutil.ReadFile("certs/client.cer")
+	clientCert, err = os.ReadFile("certs/client.cer")
 	assert(err == nil)
 	// invalid client
-	clientKey2, err = ioutil.ReadFile("certs/another/client.key")
+	clientKey2, err = os.ReadFile("certs/another/client.key")
 	assert(err == nil)
-	clientCert2, err = ioutil.ReadFile("certs/another/client.cer")
+	clientCert2, err = os.ReadFile("certs/another/client.cer")
 	assert(err == nil)
 }
 
 func TestComm(t *testing.T) {
+	logger.SetLevel(logrus.DebugLevel)
 	initCert()
 	// 初始化
 	s := NewComm()
