@@ -1,18 +1,18 @@
 package mmq
 
 import (
-	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMmq(t *testing.T) {
 	assert := assert.New(t)
 
-	// logger.SetLevel(logrus.DebugLevel)
+	logger.SetLevel(logrus.DebugLevel)
 	initCert(assert)
 
 	// startServer
@@ -86,15 +86,6 @@ func TestMmq(t *testing.T) {
 	// stopClient:client2
 	logger.Debugf("====stopClient client2")
 	c2.Close()
-}
-
-func TestAssert(t *testing.T) {
-	assert := assert.New(t)
-
-	err := errors.New("this is an error")
-	assert.NoError(err)
-
-	assert.Equal(1+2, 4)
 }
 
 var (

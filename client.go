@@ -187,7 +187,6 @@ func (c *Client) start() {
 					//  else {
 					// 	// 如果是服务端，无法重连，直接断开
 					// }
-
 				}
 				c.Close()
 				return
