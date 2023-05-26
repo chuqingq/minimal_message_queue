@@ -9,16 +9,16 @@ import (
 	"time"
 )
 
-// mmqServer 服务端
-type mmqServer struct {
+// Server 服务端
+type Server struct {
 	listener   net.Listener
 	outChan    chan Message
 	peersMutex sync.Mutex // add/del/dispatch
-	peers      []*mmqClient
+	peers      []*Client
 }
 
 // NewServer 创建并启动服务端
-func NewServer(addr string, key, cert, ca []byte) (*mmqServer, error) {
+func NewServer(addr string, key, cert, ca []byte) (*Server, error) {
 	logger.Debugf("StartServer(%v)", addr)
 	server, err := listen(addr, key, cert, ca)
 	if err != nil {
@@ -32,7 +32,7 @@ func NewServer(addr string, key, cert, ca []byte) (*mmqServer, error) {
 }
 
 // onStartServer
-func (s *mmqServer) onStartServer(success bool, msg string) {
+func (s *Server) onStartServer(success bool, msg string) {
 	logger.Debugf("server[%p].onStartServer(%v,%v)", s, success, msg)
 	m := NewMessage()
 	m.Set("cmd", "onStartServer")
@@ -41,12 +41,12 @@ func (s *mmqServer) onStartServer(success bool, msg string) {
 	sendMessage(s.outChan, m)
 }
 
-func (s *mmqServer) IsServerAlive() bool {
+func (s *Server) IsServerAlive() bool {
 	return s.listener != nil
 }
 
 // listen 服务端启动监听
-func listen(addr string, key, cert, ca []byte) (*mmqServer, error) {
+func listen(addr string, key, cert, ca []byte) (*Server, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		logger.Debugf("ResolveTCPAddr(%v) error: %v", addr, err)
@@ -75,7 +75,7 @@ func listen(addr string, key, cert, ca []byte) (*mmqServer, error) {
 	}
 	logger.Debugf("listen success")
 	// server
-	server := &mmqServer{
+	server := &Server{
 		listener: listener,
 		outChan:  make(chan Message, 128),
 	}
@@ -97,10 +97,10 @@ func listen(addr string, key, cert, ca []byte) (*mmqServer, error) {
 				logger.Debugf("server handshake error: %v", err)
 				continue
 			}
-			peer := &mmqClient{
+			peer := &Client{
 				conn:   conn,
 				server: server,
-				topics: &mmqTopics{
+				topics: &Topics{
 					topics: make(map[string]interface{}, 16),
 				},
 			}
@@ -113,21 +113,27 @@ func listen(addr string, key, cert, ca []byte) (*mmqServer, error) {
 }
 
 // Close 关闭服务端
-func (s *mmqServer) Close() {
-	s.listener.Close()
-	s.listener = nil
+func (s *Server) Close() {
+	if s.outChan != nil {
+		close(s.outChan)
+		s.outChan = nil
+	}
+	if s.listener != nil {
+		s.listener.Close()
+		s.listener = nil
+	}
 	for _, c := range s.peers {
 		c.Close()
 	}
 }
 
-func (s *mmqServer) addPeer(c *mmqClient) {
+func (s *Server) addPeer(c *Client) {
 	s.peersMutex.Lock()
 	s.peers = append(s.peers, c)
 	s.peersMutex.Unlock()
 }
 
-func (s *mmqServer) delPeer(c *mmqClient) {
+func (s *Server) delPeer(c *Client) {
 	s.peersMutex.Lock()
 	defer s.peersMutex.Unlock()
 	for index, peer := range s.peers {
@@ -139,7 +145,7 @@ func (s *mmqServer) delPeer(c *mmqClient) {
 }
 
 // dispatchTopic 根据收到的topic分发给订阅的client
-func (s *mmqServer) dispatchTopic(topic string, m *Message) {
+func (s *Server) dispatchTopic(topic string, m *Message) {
 	logger.Debugf("server[%p].dispatchTopic(%v)", s, topic)
 	s.peersMutex.Lock()
 	defer s.peersMutex.Unlock()
@@ -151,10 +157,10 @@ func (s *mmqServer) dispatchTopic(topic string, m *Message) {
 	}
 }
 
-func (s *mmqServer) Recv() *Message {
+func (s *Server) Recv() *Message {
 	return recvWithTimeout(s.outChan, -1)
 }
 
-func (s *mmqServer) TryRecv() *Message {
+func (s *Server) TryRecv() *Message {
 	return recvWithTimeout(s.outChan, 0)
 }

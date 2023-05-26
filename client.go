@@ -11,18 +11,18 @@ import (
 	"time"
 )
 
-// mmqClient 客户端
-type mmqClient struct {
+// Client 客户端
+type Client struct {
 	conn    net.Conn
 	dec     *json.Decoder
 	enc     *json.Encoder
-	topics  *mmqTopics
-	server  *mmqServer // server==nil表示是peer
+	topics  *Topics
+	server  *Server // server==nil表示是peer
 	outChan chan Message
 }
 
 // NewClient 启动客户端
-func NewClient(addr string, key, cert, ca []byte) (*mmqClient, error) {
+func NewClient(addr string, key, cert, ca []byte) (*Client, error) {
 	logger.Debugf("NewClient(addr: %v)", addr)
 	client, err := connect(addr, key, cert, ca)
 	if err != nil {
@@ -37,7 +37,7 @@ func NewClient(addr string, key, cert, ca []byte) (*mmqClient, error) {
 }
 
 // onStartClient 返回启动客户端事件
-func (c *mmqClient) onStartClient(success bool, msg string) {
+func (c *Client) onStartClient(success bool, msg string) {
 	m := NewMessage()
 	m.Set("cmd", "onStartClient")
 	m.Set("success", success)
@@ -45,12 +45,12 @@ func (c *mmqClient) onStartClient(success bool, msg string) {
 	sendMessage(c.outChan, m)
 }
 
-func (c *mmqClient) IsClientAlive() bool {
+func (c *Client) IsClientAlive() bool {
 	return c.conn != nil
 }
 
 // Subscribe 客户端订阅主题
-func (c *mmqClient) Subscribe(topics string) {
+func (c *Client) Subscribe(topics string) {
 	logger.Debugf("client[%p].Subscribe(%v)", c, topics)
 	m := NewMessage()
 	m.Set("cmd", "subscribe")
@@ -63,7 +63,7 @@ func (c *mmqClient) Subscribe(topics string) {
 }
 
 // Unsubscribe 客户端取消订阅主题
-func (c *mmqClient) Unsubscribe(topics string) {
+func (c *Client) Unsubscribe(topics string) {
 	logger.Debugf("client[%p].Unsubscribe(%v)", c, topics)
 	m := NewMessage()
 	m.Set("cmd", "unsubscribe")
@@ -76,7 +76,7 @@ func (c *mmqClient) Unsubscribe(topics string) {
 }
 
 // Publish 客户端发布消息
-func (c *mmqClient) Publish(topic string, m *Message) {
+func (c *Client) Publish(topic string, m *Message) {
 	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, m)
 	m.Set("cmd", "publish")
 	m.Set("topic", topic)
@@ -87,16 +87,20 @@ func (c *mmqClient) Publish(topic string, m *Message) {
 	}
 }
 
-func (c *mmqClient) Recv() *Message {
+func (c *Client) Recv() *Message {
 	return recvWithTimeout(c.outChan, -1)
 }
 
-func (c *mmqClient) TryRecv() *Message {
+func (c *Client) TryRecv() *Message {
 	return recvWithTimeout(c.outChan, 0)
 }
 
-func (c *mmqClient) Close() {
+func (c *Client) Close() {
 	logger.Debugf("client[%p] close", c)
+	if c.outChan != nil {
+		close(c.outChan)
+		c.outChan = nil
+	}
 	if c.conn != nil {
 		c.conn.Close()
 		c.conn = nil
@@ -112,7 +116,7 @@ func setKeepAlive(conn net.Conn, d time.Duration) {
 	tcpConn.SetKeepAlivePeriod(d)
 }
 
-func connect(addr string, key, cert, ca []byte) (*mmqClient, error) {
+func connect(addr string, key, cert, ca []byte) (*Client, error) {
 	// ca
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(ca)
@@ -146,9 +150,9 @@ func connect(addr string, key, cert, ca []byte) (*mmqClient, error) {
 		return nil, err
 	}
 	logger.Debugf("connect handshake success")
-	client := &mmqClient{
+	client := &Client{
 		conn: conn,
-		topics: &mmqTopics{
+		topics: &Topics{
 			topics: make(map[string]interface{}, 16),
 		},
 		outChan: make(chan Message, 128),
@@ -158,7 +162,7 @@ func connect(addr string, key, cert, ca []byte) (*mmqClient, error) {
 }
 
 // 建连完成后，启动交互
-func (c *mmqClient) start() {
+func (c *Client) start() {
 	c.enc = json.NewEncoder(c.conn)
 	go func() {
 		c.dec = json.NewDecoder(c.conn)
@@ -194,7 +198,7 @@ func (c *mmqClient) start() {
 	}()
 }
 
-func (c *mmqClient) handleCmd(msg *Message) {
+func (c *Client) handleCmd(msg *Message) {
 	logger.Debugf("client/peer[%p].handleCmd(%v)", c, msg)
 	cmd := msg.Get("cmd").MustString()
 	switch cmd {
@@ -218,7 +222,7 @@ func (c *mmqClient) handleCmd(msg *Message) {
 	}
 }
 
-func (c *mmqClient) send(v interface{}) error {
+func (c *Client) send(v interface{}) error {
 	logger.Debugf("client/peer[%p].Send() %v", c, v)
 	return c.enc.Encode(v)
 }
