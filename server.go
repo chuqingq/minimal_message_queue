@@ -151,34 +151,10 @@ func (s *mmqServer) dispatchTopic(topic string, m *Message) {
 	}
 }
 
-func sendMessage(outChan chan Message, msg *Message) {
-	logger.Debugf("sendMessage: %v", msg)
-	select {
-	case outChan <- *msg:
-	default:
-		logger.Debugf("sendMessage chan full")
-	}
-}
-
 func (s *mmqServer) Recv() *Message {
 	return recvWithTimeout(s.outChan, -1)
 }
 
 func (s *mmqServer) TryRecv() *Message {
 	return recvWithTimeout(s.outChan, 0)
-}
-
-func recvWithTimeout(outChan chan Message, timeout time.Duration) *Message {
-	if timeout == -1 {
-		msg := <-outChan
-		return &msg
-	} else {
-		select {
-		case msg := <-outChan:
-			return &msg
-		case <-time.After(timeout):
-			logger.Infof("Recv() timeout")
-			return nil
-		}
-	}
 }

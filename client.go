@@ -222,3 +222,27 @@ func (c *mmqClient) send(v interface{}) error {
 	logger.Debugf("client/peer[%p].Send() %v", c, v)
 	return c.enc.Encode(v)
 }
+
+func sendMessage(outChan chan Message, msg *Message) {
+	logger.Debugf("sendMessage: %v", msg)
+	select {
+	case outChan <- *msg:
+	default:
+		logger.Errorf("sendMessage chan full")
+	}
+}
+
+func recvWithTimeout(outChan chan Message, timeout time.Duration) *Message {
+	if timeout == -1 {
+		msg := <-outChan
+		return &msg
+	} else {
+		select {
+		case msg := <-outChan:
+			return &msg
+		case <-time.After(timeout):
+			logger.Debugf("Recv() timeout")
+			return nil
+		}
+	}
+}
