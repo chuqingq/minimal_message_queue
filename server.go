@@ -38,7 +38,7 @@ func (s *Server) onStartServer(success bool, msg string) {
 	m.Set("cmd", "onStartServer")
 	m.Set("success", success)
 	m.Set("msg", msg)
-	sendMessage(s.outChan, m)
+	toReceiver(s.outChan, m)
 }
 
 func (s *Server) IsServerAlive() bool {

@@ -42,7 +42,7 @@ func (c *Client) onStartClient(success bool, msg string) {
 	m.Set("cmd", "onStartClient")
 	m.Set("success", success)
 	m.Set("msg", msg)
-	sendMessage(c.outChan, m)
+	toReceiver(c.outChan, m)
 }
 
 func (c *Client) IsClientAlive() bool {
@@ -140,7 +140,6 @@ func connect(addr string, key, cert, ca []byte) (*Client, error) {
 	}
 	// setkeepalive
 	setKeepAlive(tcpConn, 10*time.Second)
-	// setKeepAlive(tcpConn.(*net.TCPConn), 10, 3, 10)
 	// tlsConn
 	conn := tls.Client(tcpConn, tlsConfig)
 	// handshake
@@ -211,7 +210,7 @@ func (c *Client) handleCmd(msg *Message) {
 	case "publish":
 		// 1. 如果是client，则是server端根据订阅分发过来的，直接发给业务
 		if c.server == nil {
-			sendMessage(c.outChan, msg)
+			toReceiver(c.outChan, msg)
 			break
 		}
 		// 2. 如果是peer，需要对应的server分发
@@ -227,12 +226,12 @@ func (c *Client) send(v interface{}) error {
 	return c.enc.Encode(v)
 }
 
-func sendMessage(outChan chan Message, msg *Message) {
-	logger.Debugf("sendMessage: %v", msg)
+func toReceiver(outChan chan Message, msg *Message) {
+	logger.Debugf("toReceiver: %v", msg)
 	select {
 	case outChan <- *msg:
 	default:
-		logger.Errorf("sendMessage chan full")
+		logger.Errorf("toReceiver chan full")
 	}
 }
 
