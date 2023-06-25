@@ -5,10 +5,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-
 	"net"
 	"strings"
 	"time"
+
+	sjson "github.com/chuqingq/simple-json"
 )
 
 // Client 客户端
@@ -18,7 +19,7 @@ type Client struct {
 	enc     *json.Encoder
 	topics  *Topics
 	server  *Server // server==nil表示是peer
-	outChan chan Message
+	outChan chan sjson.Json
 }
 
 // NewClient 启动客户端
@@ -38,7 +39,7 @@ func NewClient(addr string, key, cert, ca []byte) (*Client, error) {
 
 // onStartClient 返回启动客户端事件
 func (c *Client) onStartClient(success bool, msg string) {
-	m := NewMessage()
+	m := &sjson.Json{}
 	m.Set("cmd", "onStartClient")
 	m.Set("success", success)
 	m.Set("msg", msg)
@@ -52,7 +53,7 @@ func (c *Client) IsClientAlive() bool {
 // Subscribe 客户端订阅主题
 func (c *Client) Subscribe(topics string) {
 	logger.Debugf("client[%p].Subscribe(%v)", c, topics)
-	m := NewMessage()
+	m := &sjson.Json{}
 	m.Set("cmd", "subscribe")
 	m.Set("topics", topics)
 	if c != nil && c.enc != nil {
@@ -65,7 +66,7 @@ func (c *Client) Subscribe(topics string) {
 // Unsubscribe 客户端取消订阅主题
 func (c *Client) Unsubscribe(topics string) {
 	logger.Debugf("client[%p].Unsubscribe(%v)", c, topics)
-	m := NewMessage()
+	m := &sjson.Json{}
 	m.Set("cmd", "unsubscribe")
 	m.Set("topics", topics)
 	if c != nil && c.enc != nil {
@@ -76,7 +77,7 @@ func (c *Client) Unsubscribe(topics string) {
 }
 
 // Publish 客户端发布消息
-func (c *Client) Publish(topic string, m *Message) {
+func (c *Client) Publish(topic string, m *sjson.Json) {
 	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, m)
 	m.Set("cmd", "publish")
 	m.Set("topic", topic)
@@ -87,11 +88,11 @@ func (c *Client) Publish(topic string, m *Message) {
 	}
 }
 
-func (c *Client) Recv() *Message {
+func (c *Client) Recv() *sjson.Json {
 	return recvWithTimeout(c.outChan, -1)
 }
 
-func (c *Client) TryRecv() *Message {
+func (c *Client) TryRecv() *sjson.Json {
 	return recvWithTimeout(c.outChan, 0)
 }
 
@@ -154,7 +155,7 @@ func connect(addr string, key, cert, ca []byte) (*Client, error) {
 		topics: &Topics{
 			topics: make(map[string]interface{}, 16),
 		},
-		outChan: make(chan Message, 128),
+		outChan: make(chan sjson.Json, 128),
 	}
 	client.start()
 	return client, nil
@@ -167,7 +168,7 @@ func (c *Client) start() {
 		c.dec = json.NewDecoder(c.conn)
 		var err error
 		for {
-			msg := &Message{}
+			msg := &sjson.Json{}
 			err = c.dec.Decode(msg) // simplejson.Json实现了Unmarshaler interface，因此可以正确解析
 			if err != nil {
 				// 需要判断错误类型。如果是本端断开，上报onServerDisconnected；如果是远端断开，上报onClientDisconnected
@@ -196,7 +197,7 @@ func (c *Client) start() {
 	}()
 }
 
-func (c *Client) handleCmd(msg *Message) {
+func (c *Client) handleCmd(msg *sjson.Json) {
 	logger.Debugf("client/peer[%p].handleCmd(%v)", c, msg)
 	cmd := msg.Get("cmd").MustString()
 	switch cmd {
@@ -225,7 +226,7 @@ func (c *Client) send(v interface{}) error {
 	return c.enc.Encode(v)
 }
 
-func toReceiver(outChan chan Message, msg *Message) {
+func toReceiver(outChan chan sjson.Json, msg *sjson.Json) {
 	logger.Debugf("toReceiver: %v", msg)
 	select {
 	case outChan <- *msg:
@@ -234,7 +235,7 @@ func toReceiver(outChan chan Message, msg *Message) {
 	}
 }
 
-func recvWithTimeout(outChan chan Message, timeout time.Duration) *Message {
+func recvWithTimeout(outChan chan sjson.Json, timeout time.Duration) *sjson.Json {
 	if timeout == -1 {
 		msg := <-outChan
 		return &msg

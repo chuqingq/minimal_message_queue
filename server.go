@@ -7,12 +7,14 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	sjson "github.com/chuqingq/simple-json"
 )
 
 // Server 服务端
 type Server struct {
 	listener   net.Listener
-	outChan    chan Message
+	outChan    chan sjson.Json
 	peersMutex sync.Mutex // add/del/dispatch
 	peers      []*Client
 }
@@ -34,7 +36,7 @@ func NewServer(addr string, key, cert, ca []byte) (*Server, error) {
 // onStartServer
 func (s *Server) onStartServer(success bool, msg string) {
 	logger.Debugf("server[%p].onStartServer(%v,%v)", s, success, msg)
-	m := NewMessage()
+	m := &sjson.Json{}
 	m.Set("cmd", "onStartServer")
 	m.Set("success", success)
 	m.Set("msg", msg)
@@ -77,7 +79,7 @@ func listen(addr string, key, cert, ca []byte) (*Server, error) {
 	// server
 	server := &Server{
 		listener: listener,
-		outChan:  make(chan Message, 128),
+		outChan:  make(chan sjson.Json, 128),
 	}
 	// accept
 	go func() {
@@ -145,7 +147,7 @@ func (s *Server) delPeer(c *Client) {
 }
 
 // dispatchTopic 根据收到的topic分发给订阅的client
-func (s *Server) dispatchTopic(topic string, m *Message) {
+func (s *Server) dispatchTopic(topic string, m *sjson.Json) {
 	logger.Debugf("server[%p].dispatchTopic(%v)", s, topic)
 	s.peersMutex.Lock()
 	defer s.peersMutex.Unlock()
@@ -157,10 +159,10 @@ func (s *Server) dispatchTopic(topic string, m *Message) {
 	}
 }
 
-func (s *Server) Recv() *Message {
+func (s *Server) Recv() *sjson.Json {
 	return recvWithTimeout(s.outChan, -1)
 }
 
-func (s *Server) TryRecv() *Message {
+func (s *Server) TryRecv() *sjson.Json {
 	return recvWithTimeout(s.outChan, 0)
 }
