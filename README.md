@@ -1,6 +1,6 @@
 # minimal_message_queue
 
-A simple message queue module in Go, based on tcp/json.
+A simple in-memory message queue module in Go, based on tcp/json.
 
 ## Features
 
