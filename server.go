@@ -1,168 +1,132 @@
 package mmq
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
-	"net"
 	"sync"
-	"time"
 
 	sjson "github.com/chuqingq/simple-json"
+	"github.com/chuqingq/simple-tcpjson"
 )
 
 // Server 服务端
 type Server struct {
-	listener   net.Listener
-	outChan    chan sjson.Json
-	peersMutex sync.Mutex // add/del/dispatch
-	peers      []*Client
+	server         *tcpjson.Server
+	MatchTopicFunc MatchTopicFunc
+
+	peersMutex sync.Mutex
+	peersMap   map[string]map[*tcpjson.Client]interface{}
+}
+
+func defaultMatchTopicFunc(pubtopic, subtopic string) bool {
+	return pubtopic == subtopic
 }
 
 // NewServer 创建并启动服务端
-func NewServer(addr string, key, cert, ca []byte) (*Server, error) {
-	logger.Debugf("StartServer(%v)", addr)
-	server, err := listen(addr, key, cert, ca)
-	if err != nil {
-		logger.Debugf("Listen error: %v", err)
-		server.onStartServer(false, fmt.Sprintf("Listen error: %v", err))
-		return nil, err
-	}
-	logger.Debugf("server[%p].StartServer() success", server)
-	server.onStartServer(true, "")
-	return server, nil
-}
-
-// onStartServer
-func (s *Server) onStartServer(success bool, msg string) {
-	logger.Debugf("server[%p].onStartServer(%v,%v)", s, success, msg)
-	m := &sjson.Json{}
-	m.Set("cmd", "onStartServer")
-	m.Set("success", success)
-	m.Set("msg", msg)
-	toReceiver(s.outChan, m)
-}
-
-func (s *Server) IsServerAlive() bool {
-	return s.listener != nil
-}
-
-// listen 服务端启动监听
-func listen(addr string, key, cert, ca []byte) (*Server, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		logger.Debugf("ResolveTCPAddr(%v) error: %v", addr, err)
-		return nil, err
-	}
-	// pool
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(ca)
-	// serverCert
-	serverCert, err := tls.X509KeyPair(cert, key)
-	if err != nil {
-		logger.Debugf("X509KeyPair error: %v", err)
-		return nil, err
-	}
-	// tlsConfig
-	tlsConfig := &tls.Config{
-		MinVersion:   tls.VersionTLS12,
-		ClientCAs:    pool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		Certificates: []tls.Certificate{serverCert},
-	}
-	listener, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		logger.Debugf("ListenTCP() error: %v", err)
-		return nil, err
-	}
-	logger.Debugf("listen success")
-	// server
+func NewServer(addr string) *Server {
+	s := tcpjson.NewServer(addr)
 	server := &Server{
-		listener: listener,
-		outChan:  make(chan sjson.Json, 128),
+		server:         s,
+		peersMap:       make(map[string]map[*tcpjson.Client]interface{}),
+		MatchTopicFunc: defaultMatchTopicFunc,
 	}
-	// accept
-	go func() {
-		for {
-			tcpConn, err := listener.Accept()
-			if err != nil {
-				logger.Debugf("accept error: %v", err)
-				return
-			}
-			// keepalive
-			setKeepAlive(tcpConn, 10*time.Second)
-			// setKeepAlive(tcpConn.(*net.TCPConn), 10, 3, 10)
-			conn := tls.Server(tcpConn, tlsConfig)
-			// handshake
-			err = conn.Handshake()
-			if err != nil {
-				logger.Debugf("server handshake error: %v", err)
-				continue
-			}
-			peer := &Client{
-				conn:   conn,
-				server: server,
-				topics: &Topics{
-					topics: make(map[string]interface{}, 16),
-				},
-			}
-			server.addPeer(peer)
-			logger.Debugf("server[%p] accepted peer[%p]", server, peer)
-			peer.start()
+	s.SetOnPeerStateChange(func(c *tcpjson.Client, state tcpjson.ClientState) {
+		if state == tcpjson.ClientConnected {
+			logger.Debugf("peer[%p] connected", c)
+		} else if state == tcpjson.ClientDisconnected {
+			server.delPeer(c)
 		}
-	}()
-	return server, nil
+	})
+	s.SetOnMsgRecv(func(c *tcpjson.Client, m *sjson.Json, err error) {
+		if err != nil || m == nil {
+			return
+		}
+		switch m.Get("cmd").MustString() {
+		case "subscribe":
+			server.subscribe(c, m.Get("topics").MustStringArray())
+		case "unsubscribe":
+			server.unsubscribe(c, m.Get("topics").MustStringArray())
+		case "publish":
+			server.dispatchTopic(m.Get("topic").MustString(), m.Get("msg"))
+		default:
+			logger.Warnf("server recv unknown cmd: %v", m.Get("cmd").MustString())
+		}
+	})
+	return server
 }
 
-// Close 关闭服务端
-func (s *Server) Close() {
-	if s.outChan != nil {
-		close(s.outChan)
-		s.outChan = nil
-	}
-	if s.listener != nil {
-		s.listener.Close()
-		s.listener = nil
-	}
-	for _, c := range s.peers {
-		c.Close()
-	}
+type MatchTopicFunc func(pubtopic, subtopic string) bool
+
+func (s *Server) SetTLS(key, cert, ca []byte) *Server {
+	s.server.SetTLS(key, cert, ca)
+	return s
 }
 
-func (s *Server) addPeer(c *Client) {
+func (s *Server) SetCluster(addr string) *Server {
+	// TODO
+	return s
+}
+
+func (s *Server) SetMatchTopicFunc(match MatchTopicFunc) *Server {
+	s.MatchTopicFunc = match
+	return s
+}
+
+func (s *Server) Start() error {
+	return s.server.Start()
+}
+
+func (s *Server) Stop() {
+	s.server.Stop()
+}
+
+// peers.subscribe peer订阅topic
+func (s *Server) subscribe(c *tcpjson.Client, topics []string) {
 	s.peersMutex.Lock()
-	s.peers = append(s.peers, c)
+	for _, topic := range topics {
+		_, ok := s.peersMap[topic]
+		if !ok {
+			s.peersMap[topic] = make(map[*tcpjson.Client]interface{})
+		}
+		s.peersMap[topic][c] = nil
+	}
 	s.peersMutex.Unlock()
 }
 
-func (s *Server) delPeer(c *Client) {
+// peers.unsubscribe peer取消订阅topic
+func (s *Server) unsubscribe(c *tcpjson.Client, topics []string) {
 	s.peersMutex.Lock()
-	defer s.peersMutex.Unlock()
-	for index, peer := range s.peers {
-		if c == peer {
-			s.peers = append(s.peers[:index], s.peers[index:]...)
-			break
+	for _, topic := range topics {
+		_, ok := s.peersMap[topic]
+		if !ok {
+			continue
 		}
+		delete(s.peersMap[topic], c)
 	}
+	s.peersMutex.Unlock()
+}
+
+// peers.delPeer() 删除peer
+func (s *Server) delPeer(c *tcpjson.Client) {
+	s.peersMutex.Lock()
+	for _, peers := range s.peersMap {
+		delete(peers, c)
+	}
+	s.peersMutex.Unlock()
 }
 
 // dispatchTopic 根据收到的topic分发给订阅的client
 func (s *Server) dispatchTopic(topic string, m *sjson.Json) {
 	logger.Debugf("server[%p].dispatchTopic(%v)", s, topic)
+	msg := &sjson.Json{}
+	msg.Set("topic", topic)
+	msg.Set("msg", m)
 	s.peersMutex.Lock()
-	defer s.peersMutex.Unlock()
-	for _, peer := range s.peers {
-		if peer.topics.match(topic) {
-			logger.Debugf("dispatchTopic(%v, %v) to peer: %p", topic, m, peer)
-			peer.send(m)
+	for subtopic, peers := range s.peersMap {
+		if s.MatchTopicFunc(topic, subtopic) {
+			for peer := range peers {
+				logger.Debugf("dispatchTopic(%v, %v) to peer: %p", topic, msg, peer)
+				peer.Send(msg)
+			}
 		}
 	}
-}
-
-func (s *Server) Recv() *sjson.Json {
-	return recvWithTimeout(s.outChan, -1)
-}
-
-func (s *Server) TryRecv() *sjson.Json {
-	return recvWithTimeout(s.outChan, 0)
+	s.peersMutex.Unlock()
 }

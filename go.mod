@@ -4,8 +4,9 @@ go 1.20
 
 require (
 	github.com/chuqingq/simple-json v0.0.0-20230617103457-4ab27eb4a24d
+	github.com/chuqingq/simple-tcpjson v0.0.0-20230625021324-3a30bb2a3420
 	github.com/sirupsen/logrus v1.9.2
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.4
 )
 
 require (

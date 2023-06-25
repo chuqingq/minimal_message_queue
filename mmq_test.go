@@ -3,8 +3,8 @@ package mmq
 import (
 	"os"
 	"testing"
-	"time"
 
+	sjson "github.com/chuqingq/simple-json"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,79 +13,61 @@ func TestMmq(t *testing.T) {
 	assert := assert.New(t)
 
 	logger.SetLevel(logrus.DebugLevel)
+	logger.SetReportCaller(true)
 	initCert(assert)
+
+	checkChan := make(chan sjson.Json, 4)
 
 	// startServer
 	logger.Debugf("====StartServer")
-	s, err := NewServer(addr, serverKey, serverCert, caCert)
+	s := NewServer(addr)
+	s.SetTLS(serverKey, serverCert, caCert)
+	err := s.Start()
 	assert.NoError(err)
-
-	// onStartServer
-	msg := *s.Recv()
-	logger.Debugf("s recv: %v", msg)
-	assert.Equal(msg.String("cmd"), "onStartServer")
-	assert.True(msg.Bool("success"))
-	defer s.Close()
+	defer s.Stop()
 
 	// client1
 	logger.Debugf("====startClient")
-	c1, err := NewClient(addr, clientKey, clientCert, caCert)
+	c1 := NewClient(addr)
+	c1.SetTLS(clientKey, clientCert, caCert)
+	c1.SetOnMsgRecv(func(c *Client, topic string, msg *sjson.Json, err error) {
+		logger.Debugf("c1 recv msg: %v", msg)
+		checkChan <- *msg
+	})
+	err = c1.Start()
 	assert.NoError(err)
-
-	// onStartClient
-	msg = *c1.Recv()
-	logger.Debugf("c1 recv: %v", msg)
-	assert.Equal(msg.String("cmd"), "onStartClient")
-	assert.True(msg.Bool("success"))
-	defer c1.Close()
+	defer c1.Stop()
 
 	// client2
 	logger.Debugf("====startClient2")
-	c2, err := NewClient(addr, clientKey, clientCert, caCert)
+	c2 := NewClient(addr)
+	c2.SetTLS(clientKey, clientCert, caCert)
+	c2.SetOnMsgRecv(func(c *Client, topic string, msg *sjson.Json, err error) {
+		logger.Fatalf("c2 recv msg: %v", msg)
+		// checkChan <- msg
+	})
+	err = c2.Start()
 	assert.NoError(err)
-
-	// onStartClient
-	msg = *c2.Recv()
-	logger.Debugf("c2 recv: %v", msg)
-	assert.Equal(msg.String("cmd"), "onStartClient")
-	assert.True(msg.Bool("success"))
-
-	// client3
-	logger.Debugf("====startClient3 invalid")
-	c3, err := NewClient(addr, clientKey2, clientCert2, caCert)
-	assert.NoError(err)
-
-	// onStartClient
-	msg = *c3.Recv()
-	logger.Debugf("c3 recv: %v", msg)
-	assert.Equal(msg.String("cmd"), "onStartClient")
-	assert.True(msg.Bool("success"))
+	defer c2.Stop()
 
 	// client1 subscribe
 	logger.Debugf("====client1 subscribe client1Topic")
-	c1.Subscribe("client1Topic")
-	time.Sleep(100 * time.Millisecond) // 确保订阅成功后再发布消息
+	c1.Subscribe([]string{"client1Topic"})
 
 	// client2 publish
 	logger.Debugf("====client2 send topic client1Topic")
-	pmsg, err := MessageFromString(`{
+	pmsg, err := sjson.FromString(`{
 		"data": {
 			"key5": "value5"
 		}
 	}`)
 	assert.NoError(err)
-	msg = *pmsg
+	msg := *pmsg
 	c2.Publish("client1Topic", &msg)
 
 	// client1 recv
-	msg = *c1.Recv()
-	logger.Debugf("c1 recv msg: %v", msg)
-	assert.Equal(msg.String("cmd"), "publish")
-	assert.Equal(msg.String("topic"), "client1Topic")
-
-	// stopClient:client2
-	logger.Debugf("====stopClient client2")
-	c2.Close()
+	msg = <-checkChan
+	assert.Equal(msg.Get("data.key5").MustString(), "value5")
 }
 
 var (
