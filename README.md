@@ -7,6 +7,9 @@ A simple in-memory message queue module in Go, based on tcp/json.
 
 ## TODO
 
+- [ ] EnableTLS
+- [ ] C/C++ binding library
+
 ## go doc
 
 ```
