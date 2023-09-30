@@ -1,4 +1,4 @@
-module mmq
+module github.com/chuqingq/minimal_message_queue
 
 go 1.20
 
