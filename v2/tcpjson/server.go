@@ -1,15 +1,12 @@
 package tcpjson
 
 import (
-	"encoding/json"
+	"encoding/gob"
 	"net"
 )
 
 type Server struct {
 	ServerAddr string
-	Key        []byte
-	Cert       []byte
-	Ca         []byte
 
 	OnClientStateChange OnClientStateChange
 	OnClientMsgRecv     OnClientMsgRecv
@@ -20,13 +17,6 @@ type Server struct {
 
 func NewServer(addr string) *Server {
 	return &Server{ServerAddr: addr}
-}
-
-func (s *Server) SetTLS(key, cert, ca []byte) *Server {
-	s.Key = key
-	s.Cert = cert
-	s.Ca = ca
-	return s
 }
 
 func (s *Server) SetOnPeerStateChange(handler OnClientStateChange) *Server {
@@ -69,8 +59,8 @@ func (s *Server) loopAccept() {
 		if s.OnClientStateChange != nil {
 			s.OnClientStateChange(c, ClientConnected)
 		}
-		c.encoder = json.NewEncoder(c.Conn)
-		c.decoder = json.NewDecoder(c.Conn)
+		c.encoder = gob.NewEncoder(c.Conn)
+		c.decoder = gob.NewDecoder(c.Conn)
 		go c.loop()
 	}
 }
