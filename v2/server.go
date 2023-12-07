@@ -60,11 +60,6 @@ func NewServer(addr string) *Server {
 
 type MatchTopicFunc func(pubtopic, subtopic string) bool
 
-func (s *Server) SetTLS(key, cert, ca []byte) *Server {
-	s.server.SetTLS(key, cert, ca)
-	return s
-}
-
 func (s *Server) SetCluster(addr string) *Server {
 	// TODO
 	return s

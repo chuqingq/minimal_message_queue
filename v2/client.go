@@ -20,12 +20,6 @@ func NewClient(addr string) *Client {
 	}
 }
 
-// SetTLS 设置TLS
-func (c *Client) SetTLS(key, cert, ca []byte) *Client {
-	c.client.SetTLS(key, cert, ca)
-	return c
-}
-
 func (c *Client) SetOnMsgRecv(handler OnClientMsgRecv) *Client {
 	c.client.SetOnMsgRecv(func(client *tcpjson.Client, msg []byte, err error) {
 		if err != nil || msg == nil {
