@@ -1,8 +1,9 @@
-package tcpjson
+package tcp
 
 import (
 	"encoding/gob"
 	"net"
+	"time"
 )
 
 type Server struct {
@@ -48,6 +49,10 @@ func (s *Server) loopAccept() {
 			// log.Printf("Server.Accept() error: %v", err)
 			return
 		}
+		// set keepalive
+		conn.(*net.TCPConn).SetKeepAlive(true)
+		conn.(*net.TCPConn).SetKeepAlivePeriod(5 * time.Second)
+
 		s.Conns = append(s.Conns, conn)
 		// start peer
 		c := &Client{

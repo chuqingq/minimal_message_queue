@@ -1,4 +1,4 @@
-package tcpjson
+package tcp
 
 type ClientState int
 
