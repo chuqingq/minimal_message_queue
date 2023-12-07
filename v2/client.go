@@ -1,37 +1,34 @@
 package mmq
 
 import (
-	"github.com/chuqingq/minimal_message_queue/v2/tcpjson"
-	sjson "github.com/chuqingq/simple-json"
+	"strings"
+
+	"github.com/chuqingq/minimal_message_queue/v2/tcp"
 )
 
 // Client 客户端
 type Client struct {
-	client          *tcpjson.Client
+	client          *tcp.Client
 	OnClientMsgRecv OnClientMsgRecv
 }
 
-type OnClientMsgRecv func(c *Client, topic string, msg *sjson.Json, err error)
+type OnClientMsgRecv func(c *Client, topic string, msg []byte, err error)
 
 // NewClient 启动客户端
 func NewClient(addr string) *Client {
 	return &Client{
-		client: tcpjson.NewClient(addr),
+		client: tcp.NewClient(addr),
 	}
 }
 
 func (c *Client) SetOnMsgRecv(handler OnClientMsgRecv) *Client {
-	c.client.SetOnMsgRecv(func(client *tcpjson.Client, msg []byte, err error) {
+	c.client.SetOnMsgRecv(func(client *tcp.Client, msg []byte, err error) {
 		if err != nil || msg == nil {
 			return
 		}
-		m, err := sjson.FromBytes(msg)
-		if err != nil {
-			return
-		}
-		topic := m.Get("topic").MustString()
-		data := m.Get("msg")
-		handler(c, topic, data, err)
+		cmd := &Command{}
+		cmd.FromBytes(msg)
+		handler(c, cmd.Topic, cmd.Data, err)
 	})
 	return c
 }
@@ -43,29 +40,37 @@ func (c *Client) Start() error {
 // Subscribe 客户端订阅主题
 func (c *Client) Subscribe(topics []string) error {
 	logger.Debugf("client[%p].Subscribe(%v)", c, topics)
-	m := &sjson.Json{}
-	m.Set("cmd", "subscribe")
-	m.Set("topics", topics)
-	return c.client.Send(m.ToBytes())
+	return c.sendCommand(&Command{
+		Cmd:   "subscribe",
+		Topic: strings.Join(topics, ","),
+	})
 }
 
 // Unsubscribe 客户端取消订阅主题
 func (c *Client) Unsubscribe(topics []string) error {
 	logger.Debugf("client[%p].Unsubscribe(%v)", c, topics)
-	m := &sjson.Json{}
-	m.Set("cmd", "unsubscribe")
-	m.Set("topics", topics)
-	return c.client.Send(m.ToBytes())
+	return c.sendCommand(&Command{
+		Cmd:   "unsubscribe",
+		Topic: strings.Join(topics, ","),
+	})
 }
 
 // Publish 客户端发布消息
-func (c *Client) Publish(topic string, m *sjson.Json) error {
-	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, m)
-	msg := &sjson.Json{}
-	msg.Set("cmd", "publish")
-	msg.Set("topic", topic)
-	msg.Set("msg", m)
-	return c.client.Send(msg.ToBytes())
+func (c *Client) Publish(topic string, m []byte) error {
+	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, string(m))
+	return c.sendCommand(&Command{
+		Cmd:   "publish",
+		Topic: topic,
+		Data:  m,
+	})
+}
+
+func (c *Client) sendCommand(cmd *Command) error {
+	b, err := cmd.ToBytes()
+	if err != nil {
+		return err
+	}
+	return c.client.Send(b)
 }
 
 func (c *Client) Stop() {

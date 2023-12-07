@@ -1,9 +1,10 @@
 package mmq
 
 import (
+	"log"
 	"testing"
+	"time"
 
-	sjson "github.com/chuqingq/simple-json"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,10 +18,10 @@ func TestMmq(t *testing.T) {
 	logger.SetReportCaller(true)
 	// initCert(assert)
 
-	checkChan := make(chan sjson.Json, 4)
+	checkChan := make(chan []byte, 4)
 
 	// startServer
-	logger.Debugf("====StartServer")
+	log.Printf("====StartServer")
 	s := NewServer(addr)
 	// s.SetTLS(serverKey, serverCert, caCert)
 	err := s.Start()
@@ -28,23 +29,23 @@ func TestMmq(t *testing.T) {
 	defer s.Stop()
 
 	// client1
-	logger.Debugf("====startClient")
+	log.Printf("====startClient")
 	c1 := NewClient(addr)
 	// c1.SetTLS(clientKey, clientCert, caCert)
-	c1.SetOnMsgRecv(func(c *Client, topic string, msg *sjson.Json, err error) {
-		logger.Debugf("c1 recv msg: %v", msg)
-		checkChan <- *msg
+	c1.SetOnMsgRecv(func(c *Client, topic string, msg []byte, err error) {
+		log.Printf("c1 recv msg: %v", string(msg))
+		checkChan <- msg
 	})
 	err = c1.Start()
 	assert.NoError(err)
 	defer c1.Stop()
 
 	// client2
-	logger.Debugf("====startClient2")
+	log.Printf("====startClient2")
 	c2 := NewClient(addr)
 	// c2.SetTLS(clientKey, clientCert, caCert)
-	c2.SetOnMsgRecv(func(c *Client, topic string, msg *sjson.Json, err error) {
-		logger.Fatalf("c2 recv msg: %v", msg)
+	c2.SetOnMsgRecv(func(c *Client, topic string, msg []byte, err error) {
+		log.Fatalf("c2 recv msg: %v", string(msg))
 		// checkChan <- msg
 	})
 	err = c2.Start()
@@ -52,23 +53,19 @@ func TestMmq(t *testing.T) {
 	defer c2.Stop()
 
 	// client1 subscribe
-	logger.Debugf("====client1 subscribe client1Topic")
+	log.Printf("====client1 subscribe client1Topic")
 	c1.Subscribe([]string{"client1Topic"})
 
+	time.Sleep(20 * time.Millisecond)
+
 	// client2 publish
-	logger.Debugf("====client2 send topic client1Topic")
-	pmsg, err := sjson.FromString(`{
-		"data": {
-			"key5": "value5"
-		}
-	}`)
-	assert.NoError(err)
-	msg := *pmsg
-	c2.Publish("client1Topic", &msg)
+	log.Printf("====client2 send topic client1Topic")
+	msg := []byte("value5")
+	c2.Publish("client1Topic", msg)
 
 	// client1 recv
-	msg = <-checkChan
-	assert.Equal(msg.Get("data.key5").MustString(), "value5")
+	msg2 := <-checkChan
+	assert.Equal(msg, msg2)
 }
 
 var (
