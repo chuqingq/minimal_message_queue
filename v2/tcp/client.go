@@ -48,11 +48,9 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) loop() {
-	// msg := make([]byte, 0, 102400)
+	msg := make([]byte, 0, 102400)
 	for {
-		var msg []byte
 		err := c.decoder.Decode(&msg)
-		// log.Printf("tcp client recv: %v", len(msg))
 		if err != nil {
 			log.Printf("tcp client recv error: %v", err)
 			c.State = ClientDisconnected
