@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"encoding/gob"
+	"log"
 	"net"
 	"time"
 )
@@ -46,7 +47,7 @@ func (s *Server) loopAccept() {
 	for {
 		conn, err := s.Listener.Accept()
 		if err != nil {
-			// log.Printf("Server.Accept() error: %v", err)
+			log.Printf("Server.Accept() error: %v", err)
 			return
 		}
 		// set keepalive
