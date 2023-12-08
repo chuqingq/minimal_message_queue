@@ -23,3 +23,9 @@ func (s *Command) ToBytes() ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+const (
+	CmdPublish     = "publish"
+	CmdSubscribe   = "subscribe"
+	CmdUnsubscribe = "unsubscribe"
+)

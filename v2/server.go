@@ -47,11 +47,11 @@ func NewServer(addr string) *Server {
 		}
 		logger.Printf("server recv cmd: %v", cmd)
 		switch cmd.Cmd {
-		case "subscribe":
+		case CmdSubscribe:
 			server.subscribe(c, strings.Split(cmd.Topic, ","))
-		case "unsubscribe":
+		case CmdUnsubscribe:
 			server.unsubscribe(c, strings.Split(cmd.Topic, ","))
-		case "publish":
+		case CmdPublish:
 			server.dispatchTopic(cmd.Topic, msg)
 		default:
 			logger.Warnf("server recv unknown cmd: %v", cmd.Cmd)

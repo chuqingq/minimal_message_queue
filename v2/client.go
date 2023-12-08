@@ -41,7 +41,7 @@ func (c *Client) Start() error {
 func (c *Client) Subscribe(topics []string) error {
 	logger.Debugf("client[%p].Subscribe(%v)", c, topics)
 	return c.sendCommand(&Command{
-		Cmd:   "subscribe",
+		Cmd:   CmdSubscribe,
 		Topic: strings.Join(topics, ","),
 	})
 }
@@ -50,7 +50,7 @@ func (c *Client) Subscribe(topics []string) error {
 func (c *Client) Unsubscribe(topics []string) error {
 	logger.Debugf("client[%p].Unsubscribe(%v)", c, topics)
 	return c.sendCommand(&Command{
-		Cmd:   "unsubscribe",
+		Cmd:   CmdUnsubscribe,
 		Topic: strings.Join(topics, ","),
 	})
 }
@@ -59,7 +59,7 @@ func (c *Client) Unsubscribe(topics []string) error {
 func (c *Client) Publish(topic string, m []byte) error {
 	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, string(m))
 	return c.sendCommand(&Command{
-		Cmd:   "publish",
+		Cmd:   CmdPublish,
 		Topic: topic,
 		Data:  m,
 	})
