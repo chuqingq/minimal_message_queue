@@ -36,7 +36,6 @@ func NewServer(addr string) *Server {
 		}
 	})
 	s.SetOnMsgRecv(func(c *tcp.Client, msg []byte, err error) {
-		// logger.Printf("server recv: %v", string(msg))
 		if err != nil || msg == nil {
 			return
 		}
@@ -60,27 +59,26 @@ func NewServer(addr string) *Server {
 	return server
 }
 
+// MatchTopicFunc topic匹配函数
 type MatchTopicFunc func(pubtopic, subtopic string) bool
 
-// func (s *Server) SetCluster(addr string) *Server {
-// 	// TODO
-// 	return s
-// }
-
+// SetMatchTopicFunc 设置topic匹配函数。可以定制
 func (s *Server) SetMatchTopicFunc(match MatchTopicFunc) *Server {
 	s.MatchTopicFunc = match
 	return s
 }
 
+// Start 启动服务端
 func (s *Server) Start() error {
 	return s.server.Start()
 }
 
+// Stop 停止服务端
 func (s *Server) Stop() {
 	s.server.Stop()
 }
 
-// peers.subscribe peer订阅topic
+// subscribe peer订阅topic
 func (s *Server) subscribe(c *tcp.Client, topics []string) {
 	s.peersMutex.Lock()
 	for _, topic := range topics {
@@ -93,7 +91,7 @@ func (s *Server) subscribe(c *tcp.Client, topics []string) {
 	s.peersMutex.Unlock()
 }
 
-// peers.unsubscribe peer取消订阅topic
+// unsubscribe peer取消订阅topic
 func (s *Server) unsubscribe(c *tcp.Client, topics []string) {
 	s.peersMutex.Lock()
 	for _, topic := range topics {
@@ -106,7 +104,7 @@ func (s *Server) unsubscribe(c *tcp.Client, topics []string) {
 	s.peersMutex.Unlock()
 }
 
-// peers.delPeer() 删除peer
+// delPeer 删除peer
 func (s *Server) delPeer(c *tcp.Client) {
 	s.peersMutex.Lock()
 	for _, peers := range s.peersMap {
@@ -115,7 +113,7 @@ func (s *Server) delPeer(c *tcp.Client) {
 	s.peersMutex.Unlock()
 }
 
-// dispatchTopic 根据收到的topic分发给订阅的client。m是完整的command bytes
+// dispatchTopic 根据收到的topic分发给订阅的peer。m是完整的command bytes
 func (s *Server) dispatchTopic(topic string, m []byte) {
 	logger.Debugf("server[%p].dispatchTopic(%v)", s, topic)
 	s.peersMutex.Lock()
