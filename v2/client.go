@@ -12,7 +12,7 @@ type Client struct {
 	OnClientMsgRecv OnClientMsgRecv
 }
 
-type OnClientMsgRecv func(c *Client, topic string, msg []byte, err error)
+type OnClientMsgRecv func(c *Client, topic string, data []byte, err error)
 
 // NewClient 启动客户端
 func NewClient(addr string) *Client {
@@ -22,12 +22,12 @@ func NewClient(addr string) *Client {
 }
 
 func (c *Client) SetOnMsgRecv(handler OnClientMsgRecv) *Client {
-	c.client.SetOnMsgRecv(func(client *tcp.Client, msg []byte, err error) {
-		if err != nil || msg == nil {
+	c.client.SetOnMsgRecv(func(client *tcp.Client, data []byte, err error) {
+		if err != nil || data == nil {
 			return
 		}
 		cmd := &Command{}
-		cmd.FromBytes(msg)
+		cmd.FromBytes(data)
 		handler(c, cmd.Topic, cmd.Data, err)
 	})
 	return c
@@ -56,12 +56,12 @@ func (c *Client) Unsubscribe(topics []string) error {
 }
 
 // Publish 客户端发布消息
-func (c *Client) Publish(topic string, m []byte) error {
-	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, string(m))
+func (c *Client) Publish(topic string, data []byte) error {
+	logger.Debugf("client[%p].Publish(%v, %v)", c, topic, string(data))
 	return c.sendCommand(&Command{
 		Cmd:   CmdPublish,
 		Topic: topic,
-		Data:  m,
+		Data:  data,
 	})
 }
 
